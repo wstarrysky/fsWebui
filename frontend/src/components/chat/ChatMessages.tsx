@@ -4,6 +4,33 @@ import { isChatMessage } from "../../types";
 import { ChatMessageComponent, LoadingComponent } from "../MessageComponents";
 // import { UI_CONSTANTS } from "../../utils/constants"; // Unused for now
 
+/**
+ * Check if message contains RULES.md injected content
+ * Rules are injected with a separator "----" pattern
+ */
+function isRulesMessage(message: AllMessage): boolean {
+  if (!isChatMessage(message)) return false;
+  if (message.role !== "user") return false;
+
+  const content = message.content.trim();
+
+  // Rules messages have these characteristics:
+  // 1. Start with markdown heading (#) or contain common rule keywords
+  // 2. Contain the separator "----"
+  // 3. Contain "User message:" or similar at the end
+  const hasSeparator = content.includes("----");
+  const hasUserMessageMarker = content.includes("User message:") ||
+                                content.includes("用户消息:");
+  const startsWithHeading = content.startsWith("#") ||
+                            content.includes("安全规则") ||
+                            content.includes("安全原则");
+
+  // Also check for very long user messages with separator (likely rules)
+  const isLongWithSeparator = content.length > 500 && hasSeparator && hasUserMessageMarker;
+
+  return hasSeparator && hasUserMessageMarker && (startsWithHeading || isLongWithSeparator);
+}
+
 interface ChatMessagesProps {
   messages: AllMessage[];
   isLoading: boolean;
@@ -43,10 +70,11 @@ export function ChatMessages({ messages, isLoading }: ChatMessagesProps) {
 
     // Safe mode: Only show chat messages (user + assistant)
     // Hide all other message types per requirements
-    if (isChatMessage(message)) {
+    // Also hide RULES.md injected messages
+    if (isChatMessage(message) && !isRulesMessage(message)) {
       return <ChatMessageComponent key={key} message={message} />;
     }
-    // Hide: system, tool, tool_result, plan, thinking, todo
+    // Hide: system, tool, tool_result, plan, thinking, todo, and rules messages
     return null;
   };
 

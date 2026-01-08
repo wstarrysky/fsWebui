@@ -1,17 +1,19 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { FolderIcon } from "@heroicons/react/24/outline";
 import type { ProjectsResponse, ProjectInfo } from "../types";
 import { getProjectsUrl } from "../config/api";
 import { SettingsButton } from "./SettingsButton";
 import { SettingsModal } from "./SettingsModal";
 
-export function ProjectSelector() {
+interface ProjectSelectorProps {
+  onProjectSelect?: (path: string) => void;
+}
+
+export function ProjectSelector({ onProjectSelect }: ProjectSelectorProps) {
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const navigate = useNavigate();
 
   useEffect(() => {
     loadProjects();
@@ -34,10 +36,9 @@ export function ProjectSelector() {
   };
 
   const handleProjectSelect = (projectPath: string) => {
-    const normalizedPath = projectPath.startsWith("/")
-      ? projectPath
-      : `/${projectPath}`;
-    navigate(`/projects${normalizedPath}`);
+    if (onProjectSelect) {
+      onProjectSelect(projectPath);
+    }
   };
 
   const handleSettingsClick = () => {

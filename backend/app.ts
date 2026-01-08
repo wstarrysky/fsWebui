@@ -47,6 +47,7 @@ export interface AppConfig {
   debugMode: boolean;
   staticPath: string;
   cliPath: string; // Actual CLI script path detected by validateClaudeCli
+  defaultProjectPath?: string; // Default project directory
 }
 
 export function createApp(
@@ -102,6 +103,13 @@ export function createApp(
   // Rules management API
   app.get("/api/rules", (c) => handleGetRulesRequest(c));
   app.post("/api/rules/reload", (c) => handleReloadRulesRequest(c));
+
+  // Config API - return frontend configuration
+  app.get("/api/config", (c) => {
+    return c.json({
+      defaultProjectPath: config.defaultProjectPath ?? null,
+    });
+  });
 
   // Static file serving with SPA fallback
   // Serve static assets (CSS, JS, images, etc.)

@@ -40,6 +40,7 @@ async function main(runtime: NodeRuntime) {
     debugMode: args.debug,
     staticPath,
     cliPath,
+    defaultProjectPath: args.projectPath,
   });
 
   // Start server (only show this message when everything is ready)

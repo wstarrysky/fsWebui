@@ -48,6 +48,7 @@ async function main(runtime: DenoRuntime) {
     debugMode: args.debug,
     staticPath,
     cliPath: cliPath,
+    defaultProjectPath: args.projectPath,
   });
 
   // Start server (only show this message when everything is ready)

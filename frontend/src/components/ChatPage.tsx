@@ -1,5 +1,5 @@
 import { useEffect, useCallback, useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ChevronLeftIcon } from "@heroicons/react/24/outline";
 import type {
   ChatRequest,
@@ -7,6 +7,7 @@ import type {
   ProjectInfo,
   PermissionMode,
 } from "../types";
+import { useProject } from "../App";
 import { useClaudeStreaming } from "../hooks/useClaudeStreaming";
 import { useChatState } from "../hooks/chat/useChatState";
 import { usePermissions } from "../hooks/chat/usePermissions";
@@ -25,23 +26,11 @@ import { normalizeWindowsPath } from "../utils/pathUtils";
 import type { StreamingContext } from "../hooks/streaming/useMessageProcessor";
 
 export function ChatPage() {
-  const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { projectPath: workingDirectory } = useProject();
   const [projects, setProjects] = useState<ProjectInfo[]>([]);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-
-  // Extract and normalize working directory from URL
-  const workingDirectory = (() => {
-    const rawPath = location.pathname.replace("/projects", "");
-    if (!rawPath) return undefined;
-
-    // URL decode the path
-    const decodedPath = decodeURIComponent(rawPath);
-
-    // Normalize Windows paths (remove leading slash from /C:/... format)
-    return normalizeWindowsPath(decodedPath);
-  })();
 
   // Get current view and sessionId from query parameters
   const currentView = searchParams.get("view");
@@ -57,10 +46,11 @@ export function ChatPage() {
 
   // Get encoded name for current working directory
   const getEncodedName = useCallback(() => {
-    if (!workingDirectory || !projects.length) {
+    if (!workingDirectory) {
       return null;
     }
 
+    // First try to find in projects list
     const project = projects.find((p) => p.path === workingDirectory);
 
     // Normalize paths for comparison (handle Windows path issues)
@@ -72,7 +62,20 @@ export function ChatPage() {
     // Use normalized result if exact match fails
     const finalProject = project || normalizedProject;
 
-    return finalProject?.encodedName || null;
+    if (finalProject?.encodedName) {
+      return finalProject.encodedName;
+    }
+
+    // If not found in projects list (e.g., specified via --project-path),
+    // encode the path directly using Claude's encoding scheme:
+    // Replace /, \, :, ., _ with -
+    try {
+      const normalized = normalizedWorking.replace(/\/$/, "");
+      const encoded = normalized.replace(/[/\\:._]/g, "-");
+      return encoded;
+    } catch {
+      return null;
+    }
   }, [workingDirectory, projects]);
 
   // Load conversation history if sessionId is provided

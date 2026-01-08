@@ -13,6 +13,7 @@ export interface ParsedArgs {
   port: number;
   host: string;
   claudePath?: string;
+  projectPath?: string;
 }
 
 export function parseCliArgs(): ParsedArgs {
@@ -48,6 +49,10 @@ export function parseCliArgs(): ParsedArgs {
       "--claude-path <path>",
       "Path to claude executable (overrides automatic detection)",
     )
+    .option(
+      "--project-path <path>",
+      "Default project directory to load on startup",
+    )
     .option("-d, --debug", "Enable debug mode", false);
 
   // Parse arguments - Commander.js v14 handles this automatically
@@ -63,5 +68,6 @@ export function parseCliArgs(): ParsedArgs {
     port: options.port,
     host: options.host,
     claudePath: options.claudePath,
+    projectPath: options.projectPath,
   };
 }
