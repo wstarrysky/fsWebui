@@ -19,9 +19,29 @@ import { handleChatRequest } from "./handlers/chat.ts";
 import { handleAbortRequest } from "./handlers/abort.ts";
 import { handleGetRulesRequest, handleReloadRulesRequest } from "./handlers/rules.ts";
 import { logger } from "./utils/logger.ts";
-import { readBinaryFile } from "./utils/fs.ts";
+import { readBinaryFile } from "./utils/fs-deno.ts";
 import { initializeRulesLoader } from "./rules/loader.ts";
 import { cwd } from "node:process";
+
+function getContentType(ext: string): string {
+  const contentTypes: Record<string, string> = {
+    js: "application/javascript",
+    mjs: "application/javascript",
+    css: "text/css",
+    html: "text/html",
+    json: "application/json",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    svg: "image/svg+xml",
+    ico: "image/x-icon",
+    woff: "font/woff",
+    woff2: "font/woff2",
+    ttf: "font/ttf",
+  };
+  return contentTypes[ext] || "application/octet-stream";
+}
 
 export interface AppConfig {
   debugMode: boolean;
@@ -85,10 +105,23 @@ export function createApp(
 
   // Static file serving with SPA fallback
   // Serve static assets (CSS, JS, images, etc.)
-  const serveStatic = runtime.createStaticFileMiddleware({
-    root: config.staticPath,
+  app.get("/assets/*", async (c) => {
+    const filePath = c.req.path.replace(/^\//, "");
+    const fullPath = `${config.staticPath}/${filePath}`;
+
+    try {
+      const file = await readBinaryFile(fullPath);
+      // Determine content type
+      const ext = filePath.split(".").pop()?.toLowerCase();
+      const contentType = getContentType(ext || "");
+      return new Response(file as BodyInit, {
+        headers: { "Content-Type": contentType },
+      });
+    } catch (error) {
+      logger.app.error("Error serving {path}: {error}", { path: filePath, error });
+      return c.text("Not found", 404);
+    }
   });
-  app.use("/assets/*", serveStatic);
 
   // SPA fallback - serve index.html for all unmatched routes (except API routes)
   app.get("*", async (c) => {

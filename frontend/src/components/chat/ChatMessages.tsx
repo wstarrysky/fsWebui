@@ -1,21 +1,7 @@
 import { useRef, useEffect } from "react";
 import type { AllMessage } from "../../types";
-import {
-  isChatMessage,
-  isSystemMessage,
-  isToolMessage,
-  isToolResultMessage,
-  isPlanMessage,
-  isThinkingMessage,
-  isTodoMessage,
-} from "../../types";
-import {
-  ChatMessageComponent,
-  PlanMessageComponent,
-  ThinkingMessageComponent,
-  TodoMessageComponent,
-  LoadingComponent,
-} from "../MessageComponents";
+import { isChatMessage } from "../../types";
+import { ChatMessageComponent, LoadingComponent } from "../MessageComponents";
 // import { UI_CONSTANTS } from "../../utils/constants"; // Unused for now
 
 interface ChatMessagesProps {
@@ -55,22 +41,12 @@ export function ChatMessages({ messages, isLoading }: ChatMessagesProps) {
     // Use timestamp as key for stable rendering, fallback to index if needed
     const key = `${message.timestamp}-${index}`;
 
-    // Hide system, tool, and tool_result messages in UI (keep only chat messages)
-    if (isSystemMessage(message)) {
-      return null; // Hide system init messages
-    } else if (isToolMessage(message)) {
-      return null; // Hide tool call messages
-    } else if (isToolResultMessage(message)) {
-      return null; // Hide tool result messages
-    } else if (isPlanMessage(message)) {
-      return <PlanMessageComponent key={key} message={message} />;
-    } else if (isThinkingMessage(message)) {
-      return <ThinkingMessageComponent key={key} message={message} />;
-    } else if (isTodoMessage(message)) {
-      return <TodoMessageComponent key={key} message={message} />;
-    } else if (isChatMessage(message)) {
+    // Safe mode: Only show chat messages (user + assistant)
+    // Hide all other message types per requirements
+    if (isChatMessage(message)) {
       return <ChatMessageComponent key={key} message={message} />;
     }
+    // Hide: system, tool, tool_result, plan, thinking, todo
     return null;
   };
 

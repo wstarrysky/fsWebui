@@ -28,8 +28,21 @@ async function main(runtime: DenoRuntime) {
   const cliPath = await validateClaudeCli(runtime, args.claudePath);
 
   // Create application
-  const __dirname = dirname(fromFileUrl(import.meta.url));
-  const staticPath = join(__dirname, "../dist/static");
+  // Resolve static path: handle both compiled and source modes
+  let staticPath: string;
+
+  // In compiled mode, the binary is next to static/ folder
+  // In source mode, we need to go from cli/ to ../dist/static
+  const scriptDir = dirname(fromFileUrl(import.meta.url));
+  const compiledStaticPath = join(scriptDir, "static");
+
+  try {
+    await Deno.stat(compiledStaticPath);
+    staticPath = compiledStaticPath;
+  } catch {
+    // Source mode: static files in backend/dist/static (relative to cli/)
+    staticPath = join(scriptDir, "../dist/static");
+  }
 
   const app = createApp(runtime, {
     debugMode: args.debug,
