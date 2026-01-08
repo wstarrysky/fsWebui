@@ -1,95 +1,352 @@
-# Claude Code Web UI
+# CLAUDE.md
 
-A web-based interface for the `claude` command line tool that provides streaming responses in a chat interface.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Code Quality
+## Quick Reference
 
-Automated quality checks ensure consistent code standards:
+**Run from project root for all commands.**
 
-- **Lefthook**: Git hooks manager running `make check` before commits
-- **Quality Commands**: `make check` runs all quality checks manually
-- **CI/CD**: GitHub Actions runs quality checks on every push
-
-### Setup for New Contributors
+### Essential Commands
 
 ```bash
-# Install Lefthook
-brew install lefthook  # macOS
-# Or download from https://github.com/evilmartians/lefthook/releases
+# Quality & Testing
+make check              # All quality checks (pre-commit)
+make format             # Format frontend + backend
+make lint               # Lint both
+make typecheck          # Type check both
+make test               # Test both
 
-# Install and verify hooks
-lefthook install
-lefthook run pre-commit
+# Development
+make dev-backend        # Start backend (Deno or Node.js)
+make dev-frontend       # Start frontend (Vite)
+
+# Build
+make build-backend      # Build backend binary
+make build-frontend     # Build frontend dist
+
+# Specific Operations
+make format-files FILES="file1 file2"  # Format specific files
+make test-frontend      # Frontend tests only
+make test-backend       # Backend tests only
+```
+
+### Running Single Tests
+
+```bash
+# Frontend (Vitest)
+cd frontend
+npm test -- src/hooks/streaming/useStreamParser.test.ts
+
+# Backend (Vitest)
+cd backend
+npm test -- handlers/chat.test.ts
+```
+
+### Debug Mode
+
+```bash
+# Backend with debug logging
+cd backend
+deno task dev --debug     # Deno
+npm run dev -- --debug    # Node.js
+
+# Check debug logs
+# Look for [DEBUG] prefixed messages in console
 ```
 
 ## Architecture
 
-### Backend (Deno/Node.js)
+### Technology Stack
 
-- **Location**: `backend/` | **Port**: 8080 (configurable)
-- **Technology**: TypeScript + Hono framework with runtime abstraction
-- **Purpose**: Executes `claude` commands and streams JSON responses
+- **Backend**: TypeScript + Hono framework with Deno/Node.js runtime abstraction
+- **Frontend**: React 19 + Vite + TailwindCSS + React Router
+- **Shared**: TypeScript types in `shared/`
+- **Testing**: Vitest for both frontend and backend
+- **Build**: Single binary via `deno compile` (Deno) or esbuild bundle (Node.js)
 
-**Key Features**: Runtime abstraction, modular architecture, structured logging, universal Claude CLI path detection, session continuity, single binary distribution, comprehensive testing.
+### Project Structure
 
-**API Endpoints**:
+```
+├── backend/              # Server with runtime abstraction
+│   ├── cli/             # Entry points (deno.ts, node.ts, args.ts, validation.ts)
+│   ├── runtime/         # Runtime abstraction (types.ts, deno.ts, node.ts)
+│   ├── handlers/        # API handlers (chat.ts, projects.ts, histories.ts, abort.ts, rules.ts)
+│   ├── history/         # History processing utilities
+│   ├── middleware/      # Config context middleware
+│   ├── rules/           # Rules loader system
+│   ├── utils/           # Logging, filesystem, OS utilities
+│   └── scripts/         # Build and packaging scripts
+├── frontend/            # React application
+│   ├── src/
+│   │   ├── components/  # UI components (ChatPage, Messages, dialogs, etc.)
+│   │   ├── hooks/       # Custom hooks (streaming, chat, permissions, etc.)
+│   │   ├── config/      # Safety configuration
+│   │   ├── types/       # TypeScript definitions
+│   │   ├── contexts/    # React contexts
+│   │   └── utils/       # Utilities and constants
+├── shared/              # Shared TypeScript types
+└── CLAUDE.md           # This file
+```
 
-- `GET /api/projects` - List available project directories
-- `POST /api/chat` - Chat messages with streaming responses (`{ message, sessionId?, requestId, allowedTools?, workingDirectory? }`)
-- `POST /api/abort/:requestId` - Abort ongoing requests
-- `GET /api/projects/:encodedProjectName/histories` - Conversation histories
-- `GET /api/projects/:encodedProjectName/histories/:sessionId` - Specific conversation history
+## Critical Architecture Patterns
 
-### Frontend (React)
+### 1. Runtime Abstraction
 
-- **Location**: `frontend/` | **Port**: 3000 (configurable)
-- **Technology**: Vite + React + SWC + TypeScript + TailwindCSS + React Router
-- **Purpose**: Project selection and chat interface with streaming responses
+**Purpose**: Support both Deno and Node.js with shared business logic.
 
-**Key Features**: Project directory selection, routing system, conversation history, demo mode, real-time streaming, theme toggle, auto-scroll, accessibility features, modular hook architecture, request abort functionality, permission dialog handling, configurable Enter key behavior.
+**Implementation** (`backend/runtime/`):
+- `types.ts`: Minimal Runtime interface (runCommand, findExecutable, serve, createStaticFileMiddleware)
+- `deno.ts`: Deno-specific implementation using Deno APIs
+- `node.ts`: Node.js implementation using child_process and @hono/node-server
 
-### Shared Types
+**Usage**: All platform-specific code goes through Runtime interface, keeping handlers platform-agnostic.
 
-**Location**: `shared/` - TypeScript type definitions shared between backend and frontend
+### 2. Universal Claude CLI Path Detection
 
-**Key Types**: `StreamResponse`, `ChatRequest`, `AbortRequest`, `ProjectInfo`, `ConversationSummary`, `ConversationHistory`
+**Problem**: Claude CLI path varies across package managers (npm, pnpm, asdf, yarn, volta).
 
-## Claude Command Integration
+**Solution** (`backend/cli/validation.ts`):
+1. **PATH Wrapping**: Creates temp node wrapper to trace actual script execution
+2. **Windows Fallback**: Parses `.cmd` files for npm cmd-shim pattern
+3. **Version Validation**: Confirms CLI works via `claude --version`
 
-Backend uses Claude Code SDK executing commands with:
+**Why Complex**: Package manager wrappers hide real executable paths. Tracing captures actual execution.
 
-- `--output-format stream-json` - Streaming JSON responses
-- `--verbose` - Detailed execution information
-- `-p <message>` - Prompt mode with user message
+### 3. Streaming Architecture
 
-**Message Types**: System (initialization), Assistant (response content), Result (execution summary)
+**Flow**:
+```
+Claude SDK (AsyncGenerator)
+  ↓
+StreamResponse objects (claude_json, done, aborted, error)
+  ↓
+ReadableStream (NDJSON format)
+  ↓
+Response with streaming headers
+  ↓
+Frontend fetch → response.body.getReader()
+  ↓
+useStreamParser hook processes messages
+  ↓
+UI updates in real-time
+```
 
-### Claude CLI Path Detection
+**Key Files**:
+- Backend: `backend/handlers/chat.ts` (handleChatRequest)
+- Frontend: `frontend/src/hooks/streaming/useStreamParser.ts`
 
-Universal detection supporting npm, pnpm, asdf, yarn installations:
+### 4. Session Continuity
 
-1. Auto-discovery in system PATH
-2. Script path tracing with temporary node wrapper
-3. Version validation with `claude --version`
-4. Fallback handling with logging
+**Flow**:
+1. First message → Claude SDK creates session
+2. Backend extracts `session_id` from SDK system message
+3. Frontend stores sessionId with conversation
+4. Follow-up messages include sessionId in request
+5. Backend passes to SDK via `options.resume`
 
-**Implementation**: `backend/cli/validation.ts` with `detectClaudeCliPath()`, `validateClaudeCli()`
+**Storage**: Conversations persist in `.claude/` directory per project.
 
-## Session Continuity
+### 5. Safety & Tool Whitelisting
 
-Conversation continuity using Claude Code SDK's session management:
+**Critical for security** - Controls what tools Claude can use.
 
-1. First message starts new Claude session
-2. Frontend extracts `session_id` from SDK messages
-3. Subsequent messages include `session_id` for context
-4. Backend passes `session_id` to SDK via `options.resume`
+**Frontend Safety** (`frontend/src/config/safety.ts`):
+```typescript
+ALLOWED_MESSAGE_TYPES = ["user", "assistant"]
+BLOCKED_MESSAGE_TYPES = ["system", "tool", "tool_result", "thinking", "todo", "plan"]
+```
 
-## MCP Integration (Model Context Protocol)
+**Backend Tool Control** (`backend/handlers/chat.ts`):
+```typescript
+READ_ONLY_TOOLS = ["Read", "Grep", "Glob", "LSP", "Task"]
+// Write tools blocked by default, only allowed via user permission
+```
 
-Playwright MCP server integration for automated browser testing and demo verification.
+**Strategy**:
+- Always include read-only tools in whitelist
+- Merge with user-approved tools from frontend permission dialog
+- Block write operations unless explicitly approved
 
-### Configuration
+### 6. Abort/Cancellation Mechanism
 
+**Implementation** (`backend/app.ts`, `backend/handlers/abort.ts`):
+- Map of `AbortController` per request ID
+- `POST /api/abort/:requestId` endpoint
+- Passed to Claude SDK via `abortController` option
+- Automatic cleanup on completion or error
+
+### 7. Rules System
+
+**Purpose**: Inject user-defined rules into new conversations.
+
+**Implementation** (`backend/rules/loader.ts`):
+- Loads rules from `RULES.md` in project root
+- Cached in memory for performance
+- Injected only on new sessions (not resumed)
+- Reloadable via `POST /api/rules/reload`
+
+**File**: Create `RULES.md` in project directory for custom instructions.
+
+## API Endpoints
+
+```
+GET  /api/projects                                    # List projects
+POST /api/chat                                        # Send message (streaming)
+POST /api/abort/:requestId                            # Cancel request
+GET  /api/projects/:encodedProjectName/histories     # List conversations
+GET  /api/projects/:encodedProjectName/histories/:id # Get conversation
+GET  /api/rules                                       # Get current rules
+POST /api/rules/reload                                # Reload rules from disk
+```
+
+## Development Workflow
+
+### Initial Setup
+
+```bash
+# Install Lefthook (pre-commit hooks)
+brew install lefthook       # macOS
+lefthook install            # Install hooks
+
+# Verify hooks work
+lefthook run pre-commit
+```
+
+### Daily Development
+
+1. Make changes
+2. Run `make check` before committing (or let Lefthook do it)
+3. Commit triggers automatic quality validation
+4. Push creates PR with CI checks
+
+### Pull Request Process
+
+```bash
+# Create feature branch
+git checkout -b feature/name
+
+# Commit (Lefthook runs make check automatically)
+git commit -m "feat: description"
+
+# Create PR with labels
+gh pr create --title "..." --body "..." --label "feature" --label "backend"
+```
+
+**Labels**: `bug`, `feature`, `breaking`, `documentation`, `performance`, `refactor`, `test`, `chore`, `backend`, `frontend`
+
+### Release Process (Automated via tagpr)
+
+1. PRs merged → tagpr creates release PR
+2. Add version labels if needed (`minor-release`, `major-release`)
+3. Merge release PR → automatic tag + GitHub Actions builds binaries
+
+## Claude Code SDK Integration
+
+### Types Reference
+
+**Location**: `frontend/node_modules/@anthropic-ai/claude-code/sdk.d.ts`
+
+**Important Patterns**:
+```typescript
+// System message (fields directly on object)
+const systemMsg = sdkMessage as Extract<SDKMessage, { type: "system" }>;
+console.log(systemMsg.cwd, systemMsg.session_id);
+
+// Assistant message (content nested under message.content)
+const assistantMsg = sdkMessage as Extract<SDKMessage, { type: "assistant" }>;
+for (const item of assistantMsg.message.content) {
+  if (item.type === "text") {
+    const text = (item as { text: string }).text;
+  }
+}
+```
+
+### Dependency Update Procedure
+
+**Policy**: Fixed versions (no caret `^`) for consistency.
+
+```bash
+# 1. Check current versions
+grep "@anthropic-ai/claude-code" frontend/package.json backend/deno.json
+
+# 2. Update frontend
+cd frontend
+# Edit package.json version
+npm install
+
+# 3. Update backend (Deno)
+cd backend
+# Edit deno.json imports
+rm deno.lock
+deno cache cli/deno.ts
+
+# 4. Update backend (Node.js)
+# Edit package.json version
+npm install
+
+# 5. Verify
+make check
+```
+
+## Port Configuration
+
+**Default**:
+- Frontend: 3000
+- Backend: 8080
+
+**Custom via .env** (project root):
+```bash
+PORT=9000
+```
+
+**Runtime**:
+```bash
+# Deno
+dotenvx run --env-file=../.env -- deno task dev
+
+# Node.js
+dotenvx run --env-file=../.env -- npm run dev
+
+# Or direct
+PORT=9000 npm run dev
+```
+
+## Common Issues & Solutions
+
+### Claude CLI Not Found
+
+**Symptom**: "Claude Code process exited with code 1"
+
+**Solution**:
+```bash
+# Use explicit path
+claude-code-webui --claude-path "$(which claude)"
+
+# For Volta
+claude-code-webui --claude-path "$(volta which claude)"
+
+# For asdf
+claude-code-webui --claude-path "$(asdf which claude)"
+```
+
+### Permission Dialog Not Appearing
+
+**Check**: `frontend/src/config/safety.ts` - Ensure message types are correctly filtered.
+
+**Debug**: Enable debug mode and check console for blocked messages.
+
+### Streaming Stopped Mid-Response
+
+**Common Causes**:
+1. Backend abort triggered
+2. Network interruption
+3. Claude SDK error
+
+**Debug**: Check backend logs with `--debug` flag.
+
+## MCP Integration
+
+**Config** (`.mcp.json`):
 ```json
 {
   "mcpServers": {
@@ -102,188 +359,66 @@ Playwright MCP server integration for automated browser testing and demo verific
 }
 ```
 
-### Usage
+**Usage**: Mention "playwright mcp" in chat for browser automation.
 
-1. Say "**playwright mcp**" in requests for browser automation
-2. Visible Chrome browser window opens for interaction
-3. Manual authentication supported through browser window
+## Testing
 
-**Available Tools**: Navigation, interaction, screenshots, content access, file operations, tab management, dialog handling
+### Frontend Tests
+- **Runner**: Vitest with jsdom
+- **Libraries**: @testing-library/react
+- **Command**: `npm test` (watch) or `npm run test:run` (once)
 
-## Development
+### Backend Tests
+- **Runner**: Vitest
+- **Coverage**: CLI validation, chat handlers, history utilities
+- **Command**: `npm test`
 
-### Prerequisites
+### CI/CD
+- **Trigger**: Push to main + PRs
+- **Checks**: Format, lint, typecheck, test, build
+- **Matrix**: Node.js 20, 22, 24
 
-- Backend: Deno or Node.js (20.0.0+)
-- Frontend: Node.js
-- Claude CLI tool installed
-- dotenvx: `npm install -g @dotenvx/dotenvx`
+## Build System
 
-### Port Configuration
-
-Create `.env` file in project root:
-
+### Frontend Build
 ```bash
-PORT=9000
-```
-
-### Running the Application
-
-```bash
-# Backend
-cd backend
-deno task dev        # Deno
-npm run dev          # Node.js
-# Add --debug for debug logging
-
-# Frontend
 cd frontend
-npm run dev
+npm run build    # → frontend/dist/
 ```
 
-**Access**: Frontend http://localhost:3000, Backend http://localhost:8080
+### Backend Build
 
-### Project Structure
-
+**Deno** (single binary):
+```bash
+cd backend
+deno task build  # → claude-code-webui binary
 ```
-├── backend/              # Server with runtime abstraction
-│   ├── cli/             # Entry points (deno.ts, node.ts, args.ts, validation.ts)
-│   ├── runtime/         # Runtime abstraction (types.ts, deno.ts, node.ts)
-│   ├── handlers/        # API handlers (chat.ts, projects.ts, histories.ts, etc.)
-│   ├── history/         # History processing utilities
-│   ├── middleware/      # Middleware modules
-│   ├── utils/           # Utility modules (logger.ts)
-│   └── scripts/         # Build and packaging scripts
-├── frontend/            # React application
-│   ├── src/
-│   │   ├── config/      # API configuration
-│   │   ├── utils/       # Utilities and constants
-│   │   ├── hooks/       # Custom hooks (streaming, theme, chat state, etc.)
-│   │   ├── components/  # UI components (chat, messages, dialogs, etc.)
-│   │   ├── types/       # Type definitions
-│   │   └── contexts/    # React contexts
-├── shared/              # Shared TypeScript types
-└── CLAUDE.md           # Technical documentation
+
+**Node.js** (bundle):
+```bash
+cd backend
+npm run build    # → dist/cli/node.js + dist/static/
+```
+
+### Full Build
+```bash
+make build       # Frontend → Backend (includes frontend dist)
 ```
 
 ## Key Design Decisions
 
-1. **Runtime Abstraction**: Platform-agnostic business logic with minimal Runtime interface
-2. **Universal CLI Detection**: Tracing-based approach for all package managers
-3. **Raw JSON Streaming**: Unmodified Claude responses for frontend flexibility
-4. **Modular Architecture**: Specialized hooks and components for maintainability
-5. **TypeScript Throughout**: Consistent type safety across all components
-6. **Project Directory Selection**: User-chosen working directories for contextual file access
+1. **Runtime Abstraction**: Minimal interface supporting Deno + Node.js
+2. **Universal CLI Detection**: Tracing method for all package managers
+3. **NDJSON Streaming**: Raw Claude SDK responses for frontend flexibility
+4. **Safety Layers**: Frontend + backend tool filtering
+5. **Session via SDK**: Natural continuity using SDK session management
+6. **Modular Hooks**: Specialized React hooks for maintainability
+7. **TypeScript Throughout**: End-to-end type safety
 
-## Claude Code SDK Types Reference
+## Important Notes
 
-**SDK Types**: `frontend/node_modules/@anthropic-ai/claude-code/sdk.d.ts`
-
-```typescript
-// Type extraction
-const systemMsg = sdkMessage as Extract<SDKMessage, { type: "system" }>;
-const assistantMsg = sdkMessage as Extract<SDKMessage, { type: "assistant" }>;
-
-// Content access patterns
-for (const item of assistantMsg.message.content) {
-  if (item.type === "text") {
-    const text = (item as { text: string }).text;
-  }
-}
-
-// System message (direct access, no nesting)
-console.log(systemMsg.cwd);
-```
-
-**Key Points**: System fields directly on object, Assistant content nested under `message.content`, Result has `subtype` field
-
-## Permission Mode Switching
-
-UI-driven plan mode functionality allowing users to toggle between normal execution and plan mode.
-
-**Features**: Normal/Plan mode toggle, UI integration, session persistence
-**Implementation**: `usePermissionMode` hook, `PlanPermissionInputPanel` component
-**Usage**: Toggle in chat input → send message → review plan → choose action
-
-## Testing
-
-**Frontend**: Vitest + Testing Library (`make test-frontend`)
-**Backend**: Deno test runner (`make test-backend`)  
-**Unified**: `make test` runs both, `make check` includes in quality validation
-
-## Single Binary Distribution
-
-```bash
-cd backend && deno task build  # Local building
-```
-
-**Automated**: Push git tags → GitHub Actions builds for Linux/macOS (x64/ARM64)
-
-## Claude Code Dependency Management
-
-**Policy**: Fixed versions (no caret `^`) for consistency across frontend/backend
-
-**Update Procedure**:
-
-1. Check versions: `grep "@anthropic-ai/claude-code" frontend/package.json backend/deno.json`
-2. Update frontend package.json and `npm install`
-3. Update backend deno.json imports and `rm deno.lock && deno cache cli/deno.ts`
-4. Update backend package.json and `npm install`
-5. Verify: `make check`
-
-## Commands for Claude
-
-### Unified Commands (from project root)
-
-- `make format` - Format both frontend and backend
-- `make lint` - Lint both
-- `make typecheck` - Type check both
-- `make test` - Test both
-- `make check` - All quality checks
-- `make format-files FILES="file1 file2"` - Format specific files
-
-### Individual Commands
-
-- Development: `make dev-backend` / `make dev-frontend`
-- Testing: `make test-frontend` / `make test-backend`
-- Build: `make build-backend` / `make build-frontend`
-
-## Development Workflow
-
-### Pull Request Process
-
-1. Create feature branch: `git checkout -b feature/name`
-2. Commit changes (Lefthook runs `make check`)
-3. Push and create PR with appropriate labels:
-   ```bash
-   gh pr create --title "..." --body "..." --label "bug" --label "backend"
-   ```
-4. Include Type of Change checkboxes and description
-5. Request review and merge after approval
-
-### Labels
-
-🐛 `bug`, ✨ `feature`, 💥 `breaking`, 📚 `documentation`, ⚡ `performance`, 🔨 `refactor`, 🧪 `test`, 🔧 `chore`, 🖥️ `backend`, 🎨 `frontend`
-
-### Release Process (Automated with tagpr)
-
-1. Feature PRs merged → tagpr creates release PR
-2. Add version labels if needed (minor/major)
-3. Merge release PR → automatic tag creation
-4. GitHub Actions builds binaries automatically
-
-### GitHub Sub-Issues API
-
-```bash
-gh issue create --title "Sub-issue" --label "feature"
-SUB_ISSUE_ID=$(gh api repos/sugyan/claude-code-webui/issues/NUM --jq '.id')
-gh api repos/sugyan/claude-code-webui/issues/PARENT/sub_issues --method POST --field sub_issue_id=$SUB_ISSUE_ID
-```
-
-### Viewing Copilot Review Comments
-
-```bash
-gh api repos/sugyan/claude-code-webui/pulls/PR_NUMBER/comments
-```
-
-**Important**: Always run commands from project root. Use full paths for cd commands to avoid directory navigation issues.
+- **Always run commands from project root** - Avoid `cd` in scripts
+- **Use full paths** when necessary to avoid directory confusion
+- **Test before committing** - Lefthook enforces `make check`
+- **Debug mode** - Use `--debug` flag for detailed logging
+- **Fixed versions** - No caret `^` for Claude Code dependencies

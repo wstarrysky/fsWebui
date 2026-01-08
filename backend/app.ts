@@ -17,8 +17,11 @@ import { handleHistoriesRequest } from "./handlers/histories.ts";
 import { handleConversationRequest } from "./handlers/conversations.ts";
 import { handleChatRequest } from "./handlers/chat.ts";
 import { handleAbortRequest } from "./handlers/abort.ts";
+import { handleGetRulesRequest, handleReloadRulesRequest } from "./handlers/rules.ts";
 import { logger } from "./utils/logger.ts";
 import { readBinaryFile } from "./utils/fs.ts";
+import { initializeRulesLoader } from "./rules/loader.ts";
+import { cwd } from "node:process";
 
 export interface AppConfig {
   debugMode: boolean;
@@ -34,6 +37,10 @@ export function createApp(
 
   // Store AbortControllers for each request (shared with chat handler)
   const requestAbortControllers = new Map<string, AbortController>();
+
+  // Initialize rules loader with project root
+  const projectRoot = cwd();
+  initializeRulesLoader(projectRoot);
 
   // CORS middleware
   app.use(
@@ -71,6 +78,10 @@ export function createApp(
   );
 
   app.post("/api/chat", (c) => handleChatRequest(c, requestAbortControllers));
+
+  // Rules management API
+  app.get("/api/rules", (c) => handleGetRulesRequest(c));
+  app.post("/api/rules/reload", (c) => handleReloadRulesRequest(c));
 
   // Static file serving with SPA fallback
   // Serve static assets (CSS, JS, images, etc.)

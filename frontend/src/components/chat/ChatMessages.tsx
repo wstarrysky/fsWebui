@@ -11,9 +11,6 @@ import {
 } from "../../types";
 import {
   ChatMessageComponent,
-  SystemMessageComponent,
-  ToolMessageComponent,
-  ToolResultMessageComponent,
   PlanMessageComponent,
   ThinkingMessageComponent,
   TodoMessageComponent,
@@ -58,12 +55,13 @@ export function ChatMessages({ messages, isLoading }: ChatMessagesProps) {
     // Use timestamp as key for stable rendering, fallback to index if needed
     const key = `${message.timestamp}-${index}`;
 
+    // Hide system, tool, and tool_result messages in UI (keep only chat messages)
     if (isSystemMessage(message)) {
-      return <SystemMessageComponent key={key} message={message} />;
+      return null; // Hide system init messages
     } else if (isToolMessage(message)) {
-      return <ToolMessageComponent key={key} message={message} />;
+      return null; // Hide tool call messages
     } else if (isToolResultMessage(message)) {
-      return <ToolResultMessageComponent key={key} message={message} />;
+      return null; // Hide tool result messages
     } else if (isPlanMessage(message)) {
       return <PlanMessageComponent key={key} message={message} />;
     } else if (isThinkingMessage(message)) {

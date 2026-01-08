@@ -13,6 +13,7 @@ import { TimestampComponent } from "./TimestampComponent";
 import { MessageContainer } from "./messages/MessageContainer";
 import { CollapsibleDetails } from "./messages/CollapsibleDetails";
 import { MESSAGE_CONSTANTS } from "../utils/constants";
+import { CodeBlockRenderer } from "./CodeBlockRenderer";
 import {
   createEditResult,
   createBashPreview,
@@ -66,9 +67,7 @@ export function ChatMessageComponent({ message }: ChatMessageComponentProps) {
           }`}
         />
       </div>
-      <pre className="whitespace-pre-wrap text-sm font-mono leading-relaxed">
-        {message.content}
-      </pre>
+      <CodeBlockRenderer content={message.content} />
     </MessageContainer>
   );
 }

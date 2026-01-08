@@ -127,6 +127,8 @@ export function ChatPage() {
     onPermissionModeChange: setPermissionMode,
   });
 
+  const [originalUserMessage, setOriginalUserMessage] = useState<string>("");
+
   const handlePermissionError = useCallback(
     (toolName: string, patterns: string[], toolUseId: string) => {
       // Check if this is an ExitPlanMode permission error
@@ -148,6 +150,12 @@ export function ChatPage() {
       overridePermissionMode?: PermissionMode,
     ) => {
       const content = messageContent || input.trim();
+
+      // Store original message for permission retry
+      if (!hideUserMessage && content) {
+        setOriginalUserMessage(content);
+      }
+      
       if (!content || isLoading) return;
 
       const requestId = generateRequestId();
@@ -279,7 +287,7 @@ export function ChatPage() {
     closePermissionRequest();
 
     if (currentSessionId) {
-      sendMessage("continue", updatedAllowedTools, true);
+      sendMessage(originalUserMessage, updatedAllowedTools, true);
     }
   }, [
     permissionRequest,
@@ -288,6 +296,7 @@ export function ChatPage() {
     allowedTools,
     allowToolTemporary,
     closePermissionRequest,
+    originalUserMessage,
   ]);
 
   const handlePermissionAllowPermanent = useCallback(() => {
@@ -302,7 +311,7 @@ export function ChatPage() {
     closePermissionRequest();
 
     if (currentSessionId) {
-      sendMessage("continue", updatedAllowedTools, true);
+      sendMessage(originalUserMessage, updatedAllowedTools, true);
     }
   }, [
     permissionRequest,
@@ -311,6 +320,7 @@ export function ChatPage() {
     allowedTools,
     allowToolPermanent,
     closePermissionRequest,
+    originalUserMessage,
   ]);
 
   const handlePermissionDeny = useCallback(() => {
@@ -410,16 +420,6 @@ export function ChatPage() {
     navigate({ search: searchParams.toString() });
   }, [navigate]);
 
-  const handleBackToProjects = useCallback(() => {
-    navigate("/");
-  }, [navigate]);
-
-  const handleBackToProjectChat = useCallback(() => {
-    if (workingDirectory) {
-      navigate(`/projects${workingDirectory}`);
-    }
-  }, [navigate, workingDirectory]);
-
   // Handle global keyboard shortcuts
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
@@ -460,13 +460,9 @@ export function ChatPage() {
             <div>
               <nav aria-label="Breadcrumb">
                 <div className="flex items-center">
-                  <button
-                    onClick={handleBackToProjects}
-                    className="text-slate-800 dark:text-slate-100 text-lg sm:text-3xl font-bold tracking-tight hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 rounded-md px-1 -mx-1"
-                    aria-label="Back to project selection"
-                  >
-                    Claude Code Web UI
-                  </button>
+                  <h1 className="text-slate-800 dark:text-slate-100 text-lg sm:text-3xl font-bold tracking-tight px-1 -mx-1">
+                    问题解答小助手
+                  </h1>
                   {(isHistoryView || sessionId) && (
                     <>
                       <span
@@ -476,27 +472,29 @@ export function ChatPage() {
                         {" "}
                         ›{" "}
                       </span>
-                      <h1
+                      <span
                         className="text-slate-800 dark:text-slate-100 text-lg sm:text-3xl font-bold tracking-tight"
                         aria-current="page"
                       >
                         {isHistoryView
                           ? "Conversation History"
                           : "Conversation"}
-                      </h1>
+                      </span>
                     </>
                   )}
                 </div>
               </nav>
               {workingDirectory && (
                 <div className="flex items-center text-sm font-mono mt-1">
-                  <button
-                    onClick={handleBackToProjectChat}
-                    className="text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 rounded px-1 -mx-1 cursor-pointer"
-                    aria-label={`Return to new chat in ${workingDirectory}`}
-                  >
-                    {workingDirectory}
-                  </button>
+                  {/*<button*/}
+                  {/*  onClick={handleBackToProjectChat}*/}
+                  {/*  className="text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-slate-900 rounded px-1 -mx-1 cursor-pointer"*/}
+                  {/*  aria-label={`Return to new chat in project`}*/}
+                  {/*>*/}
+                  {/*  /!* Show only folder name, not full path *!/*/}
+                  {/*  {workingDirectory.split(/[/\\]/).filter(Boolean).pop() ||*/}
+                  {/*    workingDirectory}*/}
+                  {/*</button>*/}
                   {sessionId && (
                     <span className="ml-2 text-xs text-slate-600 dark:text-slate-400">
                       Session: {sessionId.substring(0, 8)}...
