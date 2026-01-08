@@ -58,7 +58,7 @@ export function ChatMessageComponent({ message }: ChatMessageComponentProps) {
             isUser ? "text-blue-100" : "text-slate-600 dark:text-slate-400"
           }`}
         >
-          {isUser ? "User" : "Claude"}
+          {isUser ? "User" : "小助手"}
         </div>
         <TimestampComponent
           timestamp={message.timestamp}
@@ -261,7 +261,7 @@ export function PlanMessageComponent({ message }: PlanMessageComponentProps) {
 
       <div className="mb-3">
         <p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">
-          Here is Claude's plan:
+          以下是方案:
         </p>
         <div className="bg-blue-100/50 dark:bg-blue-800/30 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
           <pre className="text-sm text-blue-900 dark:text-blue-100 whitespace-pre-wrap font-mono leading-relaxed">
@@ -282,7 +282,7 @@ export function ThinkingMessageComponent({
 }: ThinkingMessageComponentProps) {
   return (
     <CollapsibleDetails
-      label="Claude's Reasoning"
+      label="小助手的推理"
       details={message.content}
       badge="thinking"
       icon={<span className="bg-purple-400 dark:bg-purple-500">💭</span>}
@@ -388,7 +388,7 @@ export function LoadingComponent() {
       colorScheme="bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-100"
     >
       <div className="text-xs font-semibold mb-2 opacity-90 text-slate-600 dark:text-slate-400">
-        Claude
+        小助手
       </div>
       <div className="flex items-center gap-2 text-sm">
         <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>

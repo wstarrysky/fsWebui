@@ -79,7 +79,7 @@ function EmptyState() {
             💬
           </span>
         </div>
-        <p className="text-lg font-medium">Start a conversation with Claude</p>
+        <p className="text-lg font-medium">开始对话</p>
         <p className="text-sm mt-2 opacity-80">
           Type your message below to begin
         </p>
